@@ -27,6 +27,10 @@ public class BoxDrawingView extends View {
     private ArrayList<Box> mBoxen = new ArrayList<>();
     private Paint mBoxPaint;
     private Paint mBackgroundPaint;
+    private PointF mCurrentPoint;
+    private PointF mFirstPoint;
+    private PointF mSecondPoint;
+    private float mDegress =0;
 
 
     public BoxDrawingView(Context context) {
@@ -46,50 +50,86 @@ public class BoxDrawingView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        PointF current = new PointF(event.getX(), event.getY());
-        String action = "";
+        //获取当前手指的点数
+        int pointIndex=event.getPointerCount()-1;
+        mCurrentPoint =new PointF(event.getX(pointIndex), event.getY(pointIndex));
+//        String action ="";
 
-        switch (event.getAction()) {
+        switch (event.getActionMasked()) {
+                //  第一个点按住
             case MotionEvent.ACTION_DOWN:
-                action = "ACTION_DOWN";
-                mCurrentBox = new Box(current);
-                mBoxen.add(mCurrentBox);
-                break;
-            case MotionEvent.ACTION_MOVE:
-                action = "ACTION_MOVE";
-                if (mCurrentBox != null) {
-                    mCurrentBox.setCurrent(current);
-                    invalidate();
+//                action = "ACTION_DOWN";
+                mFirstPoint=mCurrentPoint;
+                if (mCurrentBox == null) {
+                    mCurrentBox = new Box(mFirstPoint);
+                    mBoxen.add(mCurrentBox);
                 }
                 break;
+            //有点在屏幕上移动时
+            case MotionEvent.ACTION_MOVE:
+//                action = "ACTION_MOVE";
+                if (mCurrentBox != null) {
+                    mCurrentBox.setCurrent(mCurrentPoint);
+                }else{
+                    mDegress+=getDegree();
+                }
+                invalidate();
+                break;
+            //最后一个点松开
             case MotionEvent.ACTION_UP:
-                action = "ACTION_UP";
+//                action = "ACTION_UP";
+                mCurrentBox=null;
+//                mFirstPoint=null;
+
+                break;
+            //当屏幕上已经有一个点被按住，此时再按下其他点时触发
+            case MotionEvent.ACTION_POINTER_DOWN:
+//                action = "ACTION_POINTER_DOWN";
+                mSecondPoint=mCurrentPoint;
+                mCurrentBox=null;
+                 break;
+            //当屏幕上有多个点被按住，松开其中一个点时触发
+            case MotionEvent.ACTION_POINTER_UP:
+//                action = "ACTION_POINTER_UP";
+//                mSecondPoint=null;
+                 break;
+            //取消手势
+            case MotionEvent.ACTION_CANCEL:
+//                action = "ACTION_CANCEL";
+                Log.i(TAG, "onTouchEvent: cancel");
                 mCurrentBox=null;
                 break;
-            case MotionEvent.ACTION_CANCEL:
-                action = "ACTION_CANCEL";
-                mCurrentBox=null;
+            default:
+//                action="";
+//                current = new PointF(event.getX(), event.getY());
+//                Log.w(TAG, "onTouchEvent: no found Constant Value" );
                 break;
         }
 
-        Log.i(TAG, "onTouchEvent: "+action+" at x="+current.x+",y="+current.y);
+//        Log.i(TAG, "onTouchEvent: "+action+" at x="+current.x+",y="+current.y);
 
         return true;
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
+//        canvas.save();
+
         canvas.drawPaint(mBackgroundPaint);
 
-        for (Box box :
-                mBoxen) {
+        canvas.rotate(mDegress,canvas.getWidth()/2,getHeight()/2);
+
+        for (Box box : mBoxen) {
             float left = Math.min(box.getOrigin().x, box.getCurrent().x);
             float right = Math.max(box.getOrigin().x, box.getCurrent().x);
             float top = Math.min(box.getOrigin().y, box.getCurrent().y);
             float bottom = Math.max(box.getOrigin().y, box.getCurrent().y);
 
             canvas.drawRect(left, top, right, bottom, mBoxPaint);
+
+
         }
+//        canvas.restore();
     }
 
     /**
@@ -122,6 +162,42 @@ public class BoxDrawingView extends View {
             Log.i(TAG, "onRestoreInstanceState: "+mBoxen.size());
         }
         super.onRestoreInstanceState(state);
+    }
+
+    private double getDistance(PointF pf1, PointF pf2) {
+        float disX = pf2.x - pf1.x;
+        float disY = pf2.y - pf1.y;
+        return Math.sqrt(disX * disX + disY * disY);
+    }
+
+    // 弧度换算成角度
+    private double radianToDegree(double radian) {
+        return radian * 180 / Math.PI;
+    }
+    //计算旋转的角度。
+    private float getDegree() {
+        double a = getDistance(mFirstPoint, mSecondPoint);
+        double b = getDistance(mSecondPoint, mCurrentPoint);
+        double c = getDistance(mFirstPoint, mCurrentPoint);
+        double cosb = (a * a + c * c - b * b) / (2 * a * c);
+        if (cosb >= 1) {
+            cosb = 1f;
+        }
+        double radian = Math.acos(cosb);
+        float newDegree = (float) radianToDegree(radian);
+        PointF firstToSecond =
+                new PointF((mSecondPoint.x - mFirstPoint.x),
+                        (mSecondPoint.y - mFirstPoint.y));
+        PointF firstToCurrent
+                = new PointF((mCurrentPoint.x - mFirstPoint.x),
+                (mCurrentPoint.y - mFirstPoint.y));
+        //向量叉乘结果, 如果结果为负数， 表示为逆时针， 结果为正数表示顺时针
+        float result = firstToSecond.x * firstToCurrent.y
+                - firstToSecond.y * firstToCurrent.x;
+        if (result < 0) {
+            newDegree = -newDegree;
+        }
+        return newDegree;
     }
 
 }
